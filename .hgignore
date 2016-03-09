@@ -1,0 +1,7 @@
+syntax: glob
+PKG-INFO
+yt_illustris_halos.egg-info/SOURCES.txt
+yt_illustris_halos.egg-info/dependency_links.txt
+yt_illustris_halos.egg-info/requires.txt
+yt_illustris_halos.egg-info/top_level.txt
+*.pyc
