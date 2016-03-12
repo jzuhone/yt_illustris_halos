@@ -38,7 +38,8 @@ class IllustrisHalos(object):
     def get_snapshot_info(self, snapshot):
         headers = {"api-key": self.api_key}
         if isinstance(snapshot, string_types):
-            snap_info = get(self.sim_info["snapshots"]+snapshot, headers=headers)
+            snap_info = get(self.sim_info["snapshots"]+snapshot, 
+                            headers=headers)
         else:
             snaps = get(self.sim_info['snapshots'], headers=headers)
             snap_info = get(snaps[snapshot]['url'], headers=headers)
@@ -72,7 +73,8 @@ class IllustrisHalos(object):
 
         subs_info = []
         for subhalo in subhalos:
-            subhalo_info = get(snap_info["subhalos"]+"%d" % subhalo, headers=headers)
+            subhalo_info = get(snap_info["subhalos"]+"%d" % subhalo, 
+                               headers=headers)
             subs_info.append(subhalo_info)
 
         hvals = {}
@@ -94,8 +96,12 @@ class IllustrisHalos(object):
 
             f = h5py.File(halo_filename, "r+")
 
-            box_width = -1.0
-
+            box_xmin = 1.0e20
+            box_ymin = 1.0e20
+            box_zmin = 1.0e20
+            box_xmax = -1.0e20
+            box_ymax = -1.0e20
+            box_zmax = -1.0e20
             num_parts = []
             for i in range(6):
                 if "PartType%d" % i in f:
@@ -105,14 +111,20 @@ class IllustrisHalos(object):
                         x_min = f["/PartType%d" % i]['Coordinates'][:,0].min()
                         y_min = f["/PartType%d" % i]['Coordinates'][:,1].min()
                         z_min = f["/PartType%d" % i]['Coordinates'][:,2].min()
-                        x_width = f["/PartType%d" % i]['Coordinates'][:,0].max() - x_min
-                        y_width = f["/PartType%d" % i]['Coordinates'][:,1].max() - y_min
-                        z_width = f["/PartType%d" % i]['Coordinates'][:,2].max() - z_min
-                        box_width = max(box_width, x_width, y_width, z_width)
+                        x_max = f["/PartType%d" % i]['Coordinates'][:,0].max()
+                        y_max = f["/PartType%d" % i]['Coordinates'][:,1].max()
+                        z_max = f["/PartType%d" % i]['Coordinates'][:,2].max()
+                        box_xmin = min(box_xmin, x_min)
+                        box_ymin = min(box_ymin, y_min)
+                        box_zmin = min(box_zmin, z_min)
+                        box_xmax = max(box_xmax, x_max)
+                        box_ymax = max(box_ymax, y_max)
+                        box_zmax = max(box_zmax, z_max)
                     else:
                         num_parts.append(0)
                 else:
                     num_parts.append(0)
+            box_width = max(box_xmax-box_xmin, box_ymax-box_ymin, box_zmax-box_zmin)
             hvals["NumPart_ThisFile"] = np.array(num_parts, dtype="int32")
             hvals["BoxSize"] = 1.1*box_width
 
@@ -120,9 +132,9 @@ class IllustrisHalos(object):
                 if "PartType%d" % i in f:
                     g = f["/PartType%d" % i]
                     if "Coordinates" in g:
-                        f["/PartType%d" % i]['Coordinates'][:,0] -= (subhalo_info['pos_x'] - 0.5*box_width)
-                        f["/PartType%d" % i]['Coordinates'][:,1] -= (subhalo_info['pos_y'] - 0.5*box_width)
-                        f["/PartType%d" % i]['Coordinates'][:,2] -= (subhalo_info['pos_z'] - 0.5*box_width)
+                        f["/PartType%d" % i]['Coordinates'][:,0] -= (box_xmin - 0.05*box_width)
+                        f["/PartType%d" % i]['Coordinates'][:,1] -= (box_ymin - 0.05*box_width)
+                        f["/PartType%d" % i]['Coordinates'][:,2] -= (box_zmin - 0.05*box_width)
 
             for k, v in hvals.items():
                 f["/Header"].attrs[k] = v
