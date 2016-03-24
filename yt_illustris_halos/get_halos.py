@@ -96,45 +96,51 @@ class IllustrisHalos(object):
 
             f = h5py.File(halo_filename, "r+")
 
-            box_xmin = 1.0e20
-            box_ymin = 1.0e20
-            box_zmin = 1.0e20
-            box_xmax = -1.0e20
-            box_ymax = -1.0e20
-            box_zmax = -1.0e20
+            # Figure out the number of particles of each type and the bounding box of the halo
+            box_min = 1.0e20
+            box_max = -1.0e20
             num_parts = []
             for i in range(6):
                 if "PartType%d" % i in f:
                     g = f["/PartType%d" % i]
                     if "ParticleIDs" in g:
                         num_parts.append(g["ParticleIDs"].shape[0])
-                        x_min = f["/PartType%d" % i]['Coordinates'][:,0].min()
-                        y_min = f["/PartType%d" % i]['Coordinates'][:,1].min()
-                        z_min = f["/PartType%d" % i]['Coordinates'][:,2].min()
-                        x_max = f["/PartType%d" % i]['Coordinates'][:,0].max()
-                        y_max = f["/PartType%d" % i]['Coordinates'][:,1].max()
-                        z_max = f["/PartType%d" % i]['Coordinates'][:,2].max()
-                        box_xmin = min(box_xmin, x_min)
-                        box_ymin = min(box_ymin, y_min)
-                        box_zmin = min(box_zmin, z_min)
-                        box_xmax = max(box_xmax, x_max)
-                        box_ymax = max(box_ymax, y_max)
-                        box_zmax = max(box_zmax, z_max)
+                        x_min = f["/PartType%d" % i]['Coordinates'][:,0].min() - subhalo_info["pos_x"]
+                        y_min = f["/PartType%d" % i]['Coordinates'][:,1].min() - subhalo_info["pos_y"]
+                        z_min = f["/PartType%d" % i]['Coordinates'][:,2].min() - subhalo_info["pos_z"]
+                        x_max = f["/PartType%d" % i]['Coordinates'][:,0].max() - subhalo_info["pos_x"]
+                        y_max = f["/PartType%d" % i]['Coordinates'][:,1].max() - subhalo_info["pos_y"]
+                        z_max = f["/PartType%d" % i]['Coordinates'][:,2].max() - subhalo_info["pos_z"]
+                        box_min = min(box_min, x_min, y_min, z_min)
+                        box_max = max(box_max, x_max, y_max, z_max)
                     else:
                         num_parts.append(0)
                 else:
                     num_parts.append(0)
-            box_width = max(box_xmax-box_xmin, box_ymax-box_ymin, box_zmax-box_zmin)
+            # We pad the box width by a factor of 1.1 to make sure we get everything inside
+            box_width = 1.1*2.*max(-box_min, box_max)
             hvals["NumPart_ThisFile"] = np.array(num_parts, dtype="int32")
-            hvals["BoxSize"] = 1.1*box_width
+            hvals["BoxSize"] = box_width
 
+            # Re-center the halo coordinates to the center of the domain
             for i in range(6):
                 if "PartType%d" % i in f:
                     g = f["/PartType%d" % i]
                     if "Coordinates" in g:
-                        f["/PartType%d" % i]['Coordinates'][:,0] -= (box_xmin - 0.05*box_width)
-                        f["/PartType%d" % i]['Coordinates'][:,1] -= (box_ymin - 0.05*box_width)
-                        f["/PartType%d" % i]['Coordinates'][:,2] -= (box_zmin - 0.05*box_width)
+                        f["/PartType%d" % i]['Coordinates'][:,0] -= (subhalo_info["pos_x"] - 0.5*box_width)
+                        f["/PartType%d" % i]['Coordinates'][:,1] -= (subhalo_info["pos_y"] - 0.5*box_width)
+                        f["/PartType%d" % i]['Coordinates'][:,2] -= (subhalo_info["pos_z"] - 0.5*box_width)
+
+            # This is hacky, but here we set the density and smoothing length
+            # to the typical SPH values instead of those defined by the Voroni tessellation
+            if "PartType0" in f:
+                del f["PartType0"]["Density"]
+                del f["PartType0"]["SmoothingLength"]
+                del f["PartType0"]["Volume"]
+                f["PartType0"]["Density"] = f["PartType0"]["SubfindDensity"]
+                f["PartType0"]["SmoothingLength"] = f["PartType0"]["SubfindHsml"]
+                del f["PartType0"]["SubfindDensity"]
+                del f["PartType0"]["SubfindHsml"]
 
             for k, v in hvals.items():
                 f["/Header"].attrs[k] = v
